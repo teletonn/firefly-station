@@ -13,6 +13,53 @@ __pycache__/
 
 # Cache directories
 cache/
+.cache/
 
 # Frontend build
 frontend/build/
+frontend/node_modules/
+node_modules/
+
+# Large files
+*.zip
+*.tar.gz
+*.7z
+*.rar
+*.exe
+*.msi
+*.dmg
+*.iso
+*.img
+*.deb
+*.rpm
+*.apk
+*.jar
+*.war
+*.ear
+*.class
+*.so
+*.dll
+*.dylib
+*.a
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.ipdb
+*.iobj
+*.ipch
+*.tlog
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+*.patch
+*.diff
+*.DS_Store
+Thumbs.db
