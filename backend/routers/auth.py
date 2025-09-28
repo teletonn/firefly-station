@@ -110,7 +110,7 @@ async def login_for_access_token(request: Request):
             detail="Internal server error during authentication"
         )
 
-# Simple login endpoint without automatic validation
+# Simple login endpoint for debugging
 @router.post("/simple-login")
 async def simple_login(request: Request):
     """Simple login endpoint for debugging."""
@@ -206,9 +206,9 @@ async def login_for_access_token_oauth2(form_data: OAuth2PasswordRequestForm = D
             detail="Internal server error during authentication"
         )
 
-@router.post("/register")
+@router.post("/register", response_model=Token)
 async def register_admin(user: UserCreate):
-    """Register a new admin user."""
+    """Register a new admin user and return an access token."""
     # Check if user already exists
     existing_user = database.get_admin_user_by_username(user.username)
     if existing_user:
@@ -222,7 +222,13 @@ async def register_admin(user: UserCreate):
     if not admin_id:
         raise HTTPException(status_code=500, detail="Failed to create user")
 
-    return {"message": "Admin user created successfully"}
+    # Create access token for the new user
+    access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth.create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/me")
 async def read_users_me(current_user = Depends(auth.get_current_active_user)):

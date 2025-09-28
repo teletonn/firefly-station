@@ -18,7 +18,7 @@ class ZoneCreate(BaseModel):
     center_latitude: float = Field(..., ge=-90, le=90)
     center_longitude: float = Field(..., ge=-180, le=180)
     radius_meters: float = Field(..., gt=0, le=100000)  # Max 100km radius
-    zone_type: str = Field('circular', pattern='^(circular|polygon)$')
+    zone_type: str = Field('circular', pattern='^(circular|polygon|safe_zone|danger_zone|poi|restricted|tracking)$')
 
 class ZoneUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -26,7 +26,7 @@ class ZoneUpdate(BaseModel):
     center_latitude: Optional[float] = Field(None, ge=-90, le=90)
     center_longitude: Optional[float] = Field(None, ge=-180, le=180)
     radius_meters: Optional[float] = Field(None, gt=0, le=100000)
-    zone_type: Optional[str] = Field(None, pattern='^(circular|polygon)$')
+    zone_type: Optional[str] = Field(None, pattern='^(circular|polygon|safe_zone|danger_zone|poi|restricted|tracking)$')
     is_active: Optional[bool] = None
 
 class ZoneResponse(BaseModel):

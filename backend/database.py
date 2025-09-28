@@ -864,6 +864,19 @@ def get_admin_user_by_id(admin_id):
     conn.close()
     return dict(row) if row else None
 
+def delete_user(username):
+    """Delete an admin user by username."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM admin_users WHERE username = ?", (username,))
+        conn.commit()
+        conn.close()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        logger.error(f"Error deleting user {username}: {e}")
+        return False
+
 def get_role_permissions(role_name):
     """Get permissions for a role."""
     conn = get_connection()
@@ -1154,11 +1167,16 @@ def get_users_in_group(group_id):
     return [dict(row) for row in rows]
 
 # Alert Management Functions
-def create_alert(user_id, zone_id, alert_type, title, message, severity='medium', location_latitude=None, location_longitude=None):
-    """Create a new alert."""
+def create_alert(user_id, zone_id, alert_type, title, message, severity='medium', location_latitude=None, location_longitude=None, cursor=None):
+    """
+    Create a new alert in the database.
+    Can use an existing cursor or create a new connection.
+    """
+    conn = None
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        if cursor is None:
+            conn = get_connection()
+            cursor = conn.cursor()
 
         cursor.execute('''
             INSERT INTO alerts (user_id, zone_id, alert_type, severity, title, message, location_latitude, location_longitude)
@@ -1166,12 +1184,17 @@ def create_alert(user_id, zone_id, alert_type, title, message, severity='medium'
         ''', (user_id, zone_id, alert_type, severity, title, message, location_latitude, location_longitude))
 
         alert_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+
+        if conn:  # Only commit if we created a new connection
+            conn.commit()
+
         return alert_id
     except sqlite3.Error as e:
         logger.error(f"Error creating alert: {e}")
         return None
+    finally:
+        if conn:  # Only close if we created a new connection
+            conn.close()
 
 def get_alert(alert_id):
     """Get alert by ID."""

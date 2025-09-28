@@ -111,7 +111,7 @@ async def get_process(
 
     return process
 
-@router.post("/")
+@router.post("/", status_code=200)
 async def create_process(
     name: str = Body(...),
     description: Optional[str] = Body(None),
@@ -342,15 +342,19 @@ async def execute_process(
                         raise ValueError("Missing 'to_id' or 'message' in action config")
 
                 elif action_type == 'create_alert':
-                    database.create_alert(
+                    alert_id = database.create_alert(
                         user_id=action_config.get('user_id'),
                         zone_id=action_config.get('zone_id'),
                         alert_type=action_config.get('alert_type', 'process_generated'),
                         title=action_config.get('title', 'Process Alert'),
                         message=action_config.get('message', 'Alert from process'),
-                        severity=action_config.get('severity', 'medium')
+                        severity=action_config.get('severity', 'medium'),
+                        cursor=cursor  # Pass the existing cursor
                     )
-                    result = {"status": "alert_created"}
+                    if alert_id:
+                        result = {"status": "alert_created", "alert_id": alert_id}
+                    else:
+                        raise ValueError("Failed to create alert in database")
 
                 # Add other action handlers here
                 else:
