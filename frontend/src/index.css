@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for dark theme */
+@layer base {
+  :root {
+    --background: 15 23 42;
+    --foreground: 248 250 252;
+    --muted: 30 41 59;
+    --muted-foreground: 148 163 184;
+    --popover: 15 23 42;
+    --popover-foreground: 248 250 252;
+    --card: 30 41 59;
+    --card-foreground: 248 250 252;
+    --border: 51 65 85;
+    --input: 51 65 85;
+    --primary: 59 130 246;
+    --primary-foreground: 248 250 252;
+    --secondary: 51 65 85;
+    --secondary-foreground: 248 250 252;
+    --accent: 139 92 246;
+    --accent-foreground: 248 250 252;
+    --destructive: 239 68 68;
+    --destructive-foreground: 248 250 252;
+    --ring: 59 130 246;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-gray-600;
+  }
+  body {
+    @apply bg-dark-900 text-white;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-dark-800;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-dark-600 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-dark-500;
+}
+
+/* Neon glow effects */
+.neon-cyan {
+  box-shadow: 0 0 5px theme('colors.accent.cyan'), 0 0 10px theme('colors.accent.cyan'), 0 0 15px theme('colors.accent.cyan');
+}
+
+.neon-purple {
+  box-shadow: 0 0 5px theme('colors.accent.purple'), 0 0 10px theme('colors.accent.purple'), 0 0 15px theme('colors.accent.purple');
+}
+
+.neon-green {
+  box-shadow: 0 0 5px theme('colors.accent.green'), 0 0 10px theme('colors.accent.green'), 0 0 15px theme('colors.accent.green');
+}
+
+/* Animation classes */
+@keyframes pulse-neon {
+  0%, 100% {
+    box-shadow: 0 0 5px theme('colors.accent.cyan'), 0 0 10px theme('colors.accent.cyan'), 0 0 15px theme('colors.accent.cyan');
+  }
+  50% {
+    box-shadow: 0 0 10px theme('colors.accent.cyan'), 0 0 20px theme('colors.accent.cyan'), 0 0 30px theme('colors.accent.cyan');
+  }
+}
+
+.animate-pulse-neon {
+  animation: pulse-neon 2s ease-in-out infinite;
+}

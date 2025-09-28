@@ -1,0 +1,72 @@
+help_message: "Welcome! LongFast \u0420\u0455\u0420\xB1\u0421\u2030\u0420\u0451\u0420\
+  \u2116 \u0420\u0454\u0420\xB0\u0420\u0405\u0420\xB0\u0420\xBB, \u0420\u0406 \u0420\
+  \u0405\u0420\xB5\u0420\u0456\u0420\u0455 \u0420\u0458\u0421\u2039 \u0420\u0405\u0420\
+  \xB5 \u0421\u201E\u0420\xBB\u0421\u0453\u0420\u0491\u0420\u0451\u0420\u0458. \u0420\
+  \u201D\u0420\u0455\u0420\xB1\u0420\xB0\u0420\u0406\u0421\u040A \u0420\u0454\u0420\
+  \xB0\u0420\u0405\u0420\xB0\u0420\xBB KRASNODAR \u0421\u0403 \u0420\u0454\u0420\xBB\
+  \u0421\u040B\u0421\u2021\u0420\xB5\u0420\u0458 KQ== \u0421\u201A\u0420\xB0\u0420\
+  \u0458 \u0420\u0458\u0420\u0455\u0420\xB6\u0420\u0405\u0420\u0455 \u0421\u0403\u0420\
+  \u0406\u0420\u0455\u0420\xB1\u0420\u0455\u0420\u0491\u0420\u0405\u0420\u0455 \u0420\
+  \u0455\u0420\xB1\u0421\u2030\u0420\xB0\u0421\u201A\u0421\u040A\u0421\u0403\u0421\
+  \u040F. \u0420\u045E\u0420\xB5\u0420\xBB\u0420\xB5\u0420\u0456\u0421\u0402\u0420\
+  \xB0\u0420\u0458: @ffmesh"
+llm_provider: ollama
+mcpServers:
+  agent-zero:
+    type: sse
+    url: http://localhost:50001/mcp/t-XcRviocDg-egRUxt/sse
+  agent-zero-http:
+    type: streamable-http
+    url: http://localhost:50001/mcp/t-XcRviocDg-egRUxt/http
+message_delivery:
+  chunk_timeout_seconds: 60
+  enable_chunking: true
+  enable_confirmations: true
+  inter_chunk_delay_seconds: 2
+  max_chunk_retries: 3
+  max_chunks: 16
+  max_message_length_bytes: 3200
+  metadata_overhead_bytes: 50
+  retry_delay_seconds: 15
+model:
+  agent0:
+    api_key: XcRviocDg-egRUxt
+    name: agent0-model
+  ollama:
+    name: qwen3:4b
+    tool_use: true
+  openrouter:
+    api_key: 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
+    name: openai/gpt-5-nano
+    web_search_enabled: true
+respond_in_channel_0: false
+tools:
+- description: Type the given string onto user keyboard
+  name: type_on_keyboard
+  parameters:
+    properties:
+      input:
+        description: The given string to type
+        type: string
+    required:
+    - input
+    type: object
+- description: Call emergency service, for when help is needed, used this when user
+    is in distress, describe the situation based on message history
+  name: ping_emergency
+  parameters:
+    properties:
+      location:
+        description: description of location of user based on their node information
+        type: string
+      situation:
+        description: description of user situation for emergency service
+        type: string
+    required:
+    - situation
+    type: object
+web_server:
+  cors_origins:
+  - http://localhost:3000
+  host: 0.0.0.0
+  port: 8000

@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  firefly-station:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./meshtastic_llm.db:/app/meshtastic_llm.db
+      - ./backups:/app/backups
+      - ./logs:/app/logs
+    environment:
+      - NODE_ENV=production
+      - PYTHONPATH=/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "from backend import database; database.init_db(); print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - firefly-network
+
+  # Optional: Reverse proxy with SSL
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - firefly-station
+    restart: unless-stopped
+    networks:
+      - firefly-network
+
+  # Optional: Database backup service
+  backup:
+    image: alpine:latest
+    volumes:
+      - ./backups:/backups
+      - ./meshtastic_llm.db:/data/meshtastic_llm.db:ro
+    command: |
+      sh -c "
+        while true; do
+          cp /data/meshtastic_llm.db /backups/db_\$(date +%%Y%%m%%d_%%H%%M%%S).backup
+          # Keep only last 7 days of backups
+          find /backups -name 'db_*.backup' -type f -mtime +7 -delete
+          sleep 86400
+        done
+      "
+    restart: unless-stopped
+    networks:
+      - firefly-network
+
+networks:
+  firefly-network:
+    driver: bridge
+
+volumes:
+  db-data:
+    driver: local
