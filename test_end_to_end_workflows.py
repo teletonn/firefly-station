@@ -437,7 +437,7 @@ class EndToEndWorkflowTest(unittest.TestCase):
             # Step 3: Simulate incoming emergency message
             emergency_message = "HELP! I'm in an emergency situation!"
 
-            # Simulate message processing (this would normally come through Meshtastic)
+            # Simulate message processing (this would normally come through Светлячок)
             # Store the message
             database.insert_message(
                 sender="bot_test_user",

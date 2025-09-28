@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Processes module provides a comprehensive workflow/process management system for the Meshtastic-based Firefly station management system. It enables users to create, monitor, and manage automated processes that respond to events and execute actions across the system.
+The Processes module provides a comprehensive workflow/process management system for the Светлячок-based Firefly station management system. It enables users to create, monitor, and manage automated processes that respond to events and execute actions across the system.
 
 ### Key Features
 

@@ -5,12 +5,13 @@ import logging
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
+import json
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DB_PATH = 'meshtastic_llm.db'
+DB_PATH = 'svetlyachok_station.db'
 
 def get_connection():
     """Get SQLite database connection with row factory."""
@@ -126,7 +127,7 @@ def init_db():
 
         # Update admin role permissions if needed
         cursor.execute('''
-            UPDATE roles SET permissions = '["users", "messages", "audit", "bot_controls", "zones", "alerts", "analytics", "processes"]' WHERE name = 'admin'
+            UPDATE roles SET permissions = '["all", "dashboard:read", "users", "users:read", "messages", "messages:read", "audit", "audit:read", "bot_controls", "bot_controls:read", "zones", "zones:read", "alerts", "alerts:read", "alerts:create", "alerts:acknowledge", "alerts:resolve", "alerts:update", "alerts:delete", "alerts:create_rule", "alerts:read_rule", "alerts:update_rule", "alerts:delete_rule", "processes", "processes:read", "processes:create", "processes:update", "processes:delete", "processes:execute", "analytics", "analytics:read"]' WHERE name = 'admin'
         ''')
 
         # Create zones table for geofencing
@@ -524,6 +525,30 @@ def init_db():
         except sqlite3.Error as e:
             logger.warning(f"Some user table alterations may have failed (columns might already exist): {e}")
 
+        # Create outgoing_message_queue table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS outgoing_message_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                to_id TEXT NOT NULL,
+                message TEXT NOT NULL,
+                status TEXT DEFAULT 'pending', -- pending, sending, sent, failed
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                sent_at TIMESTAMP
+            )
+        ''')
+
+        # Create bot_command_queue table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS bot_command_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                command TEXT NOT NULL,
+                parameters TEXT, -- JSON string
+                status TEXT DEFAULT 'pending', -- pending, processing, processed, failed
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                processed_at TIMESTAMP
+            )
+        ''')
+
         # Create indexes for better performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_location_history_user_time ON location_history(user_id, recorded_at)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_location_history_recorded_at ON location_history(recorded_at)')
@@ -781,6 +806,19 @@ def get_messages_for_user(user_id, limit=50):
     conn.close()
     return [dict(row) for row in rows]
 
+def delete_message(message_id):
+    """Delete a message by its ID."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+        conn.commit()
+        conn.close()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        logger.error(f"Error deleting message {message_id}: {e}")
+        return False
+
 # Admin functions
 
 def create_admin_user(username, email, hashed_password, role='admin'):
@@ -931,35 +969,6 @@ def get_audit_logs(limit=100, offset=0):
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
-
-def get_bot_stats():
-    """Get bot statistics."""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    # Get user count
-    cursor.execute('SELECT COUNT(*) as user_count FROM users')
-    user_count = cursor.fetchone()['user_count']
-
-    # Get message count
-    cursor.execute('SELECT COUNT(*) as message_count FROM messages')
-    message_count = cursor.fetchone()['message_count']
-
-    # Get active sessions
-    cursor.execute('SELECT COUNT(*) as active_sessions FROM sessions WHERE end_time IS NULL')
-    active_sessions = cursor.fetchone()['active_sessions']
-
-    # Get registered users
-    cursor.execute("SELECT COUNT(*) as registered_users FROM users WHERE registration_status = 'registered'")
-    registered_users = cursor.fetchone()['registered_users']
-
-    conn.close()
-    return {
-        'total_users': user_count,
-        'total_messages': message_count,
-        'active_sessions': active_sessions,
-        'registered_users': registered_users
-    }
 
 # Geolocation Database Functions
 
@@ -2167,6 +2176,94 @@ def get_failed_chunks(limit=100, offset=0):
     conn.close()
     return [dict(row) for row in rows]
 
+# Outgoing Message Queue Functions
+
+def add_to_outgoing_queue(to_id, message):
+    """Add a message to the outgoing queue."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO outgoing_message_queue (to_id, message) VALUES (?, ?)", (to_id, message))
+        conn.commit()
+        conn.close()
+        return cursor.lastrowid
+    except sqlite3.Error as e:
+        logger.error(f"Error adding to outgoing queue: {e}")
+        return None
+
+def get_pending_outgoing_messages(limit=10):
+    """Get pending messages from the outgoing queue."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM outgoing_message_queue WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?", (limit,))
+        messages = [dict(row) for row in cursor.fetchall()]
+        if messages:
+            # Mark messages as 'sending' to prevent re-picking
+            ids = [msg['id'] for msg in messages]
+            cursor.execute(f"UPDATE outgoing_message_queue SET status = 'sending' WHERE id IN ({','.join(['?']*len(ids))})", ids)
+            conn.commit()
+        conn.close()
+        return messages
+    except sqlite3.Error as e:
+        logger.error(f"Error getting pending outgoing messages: {e}")
+        return []
+
+def mark_outgoing_message_sent(message_id):
+    """Mark an outgoing message as sent."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE outgoing_message_queue SET status = 'sent', sent_at = ? WHERE id = ?", (datetime.datetime.now(), message_id))
+        conn.commit()
+        conn.close()
+    except sqlite3.Error as e:
+        logger.error(f"Error marking outgoing message as sent: {e}")
+
+# Bot Command Queue Functions
+
+def add_to_bot_command_queue(command, parameters=None):
+    """Add a command to the bot command queue."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        params_json = json.dumps(parameters) if parameters else None
+        cursor.execute("INSERT INTO bot_command_queue (command, parameters) VALUES (?, ?)", (command, params_json))
+        conn.commit()
+        conn.close()
+        return cursor.lastrowid
+    except sqlite3.Error as e:
+        logger.error(f"Error adding to bot command queue: {e}")
+        return None
+
+def get_pending_bot_commands(limit=5):
+    """Get pending commands from the bot command queue."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM bot_command_queue WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?", (limit,))
+        commands = [dict(row) for row in cursor.fetchall()]
+        if commands:
+            ids = [cmd['id'] for cmd in commands]
+            cursor.execute(f"UPDATE bot_command_queue SET status = 'processing' WHERE id IN ({','.join(['?']*len(ids))})", ids)
+            conn.commit()
+        conn.close()
+        return commands
+    except sqlite3.Error as e:
+        logger.error(f"Error getting pending bot commands: {e}")
+        return []
+
+def mark_bot_command_processed(command_id, status='processed'):
+    """Mark a bot command as processed or failed."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE bot_command_queue SET status = ?, processed_at = ? WHERE id = ?", (status, datetime.datetime.now(), command_id))
+        conn.commit()
+        conn.close()
+    except sqlite3.Error as e:
+        logger.error(f"Error marking bot command as processed: {e}")
+
 # Analytics Database Functions
 
 def get_user_stats():
@@ -2770,4 +2867,13 @@ def get_websocket_metrics(days):
         'messages_per_second': 12.3,
         'connection_drops': 5,
         'avg_session_duration': 1800
+    }
+
+def get_bot_stats():
+    """Get bot statistics."""
+    # This is a placeholder. In a real application, you would get this from the bot process.
+    return {
+        "status": "online",
+        "uptime_percentage": 99.9,
+        "response_time_avg": 0.5
     }

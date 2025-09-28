@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useWebSocket } from '../contexts/WebSocketContext';
 import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline } from 'react-leaflet';
 import L from 'leaflet';
-// import 'leaflet.heat'; // Commented out - not available
+import 'leaflet.heat';
 import { DivIcon } from 'leaflet';
 import {
   MapPin,
@@ -375,42 +375,39 @@ const MovementTrail = ({ trail, color = '#3b82f6' }) => {
   );
 };
 
-// Heatmap Layer Component - Commented out due to missing leaflet.heat dependency
-// const HeatmapLayer = ({ data, map }) => {
-//   useEffect(() => {
-//     if (!map || !data || data.length === 0) return;
+const HeatmapLayer = ({ data, map }) => {
+  useEffect(() => {
+    if (!map || !data || data.length === 0) return;
 
-//     // Create heatmap data format for leaflet.heat
-//     const heatData = data.map(point => [
-//       point.lat,
-//       point.lon,
-//       point.intensity / 10 // Normalize intensity
-//     ]);
+    const heatData = data.map(point => [
+      point.lat,
+      point.lon,
+      point.intensity / 10 // Normalize intensity
+    ]);
 
-//     // Add heatmap layer
-//     const heatLayer = L.heatLayer(heatData, {
-//       radius: 25,
-//       blur: 15,
-//       maxZoom: 10,
-//       max: 1.0,
-//       gradient: {
-//         0.2: 'blue',
-//         0.4: 'lime',
-//         0.6: 'yellow',
-//         0.8: 'orange',
-//         1.0: 'red'
-//       }
-//     }).addTo(map);
+    const heatLayer = L.heatLayer(heatData, {
+      radius: 25,
+      blur: 15,
+      maxZoom: 10,
+      max: 1.0,
+      gradient: {
+        0.2: 'blue',
+        0.4: 'lime',
+        0.6: 'yellow',
+        0.8: 'orange',
+        1.0: 'red'
+      }
+    }).addTo(map);
 
-//     return () => {
-//       if (map.hasLayer(heatLayer)) {
-//         map.removeLayer(heatLayer);
-//       }
-//     };
-//   }, [data, map]);
+    return () => {
+      if (map.hasLayer(heatLayer)) {
+        map.removeLayer(heatLayer);
+      }
+    };
+  }, [data, map]);
 
-//   return null;
-// };
+  return null;
+};
 
 // Dwell Time Overlay Component
 const DwellTimeOverlay = ({ dwellTimes }) => {
@@ -450,9 +447,6 @@ const MapView = ({
   className = '',
   center = [55.7558, 37.6176],
   zoom = 13,
-  users = [],
-  zones = [],
-  trails = [],
   onUserClick
 }) => {
   const { t } = useTranslation();
@@ -470,34 +464,16 @@ const MapView = ({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditingZone, setIsEditingZone] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [heatmapData, setHeatmapData] = useState([]);
 
-  // Fetch initial data
   useEffect(() => {
-    fetchZones();
-    fetchUsers();
+    fetchMapData();
   }, []);
 
-  const fetchZones = async () => {
+  const fetchMapData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/zones/?limit=100&offset=0', {
-        headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setLiveZones(data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching zones:', error);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/users/?limit=100&offset=0', {
+      const response = await fetch('/api/dashboard/map-data', {
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
         },
@@ -505,9 +481,10 @@ const MapView = ({
       if (response.ok) {
         const data = await response.json();
         setLiveUsers(data.users || []);
+        setLiveZones(data.zones || []);
       }
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching map data:', error);
     } finally {
       setLoading(false);
     }
@@ -584,22 +561,13 @@ const MapView = ({
     return false;
   };
 
-  // Handle zone click
   const handleZoneClick = (zone) => {
     setSelectedZone(zone);
   };
 
-  // Initialize live data
-  useEffect(() => {
-    setLiveUsers(users);
-    setLiveZones(zones);
-    setMovementTrails(trails);
-  }, [users, zones, trails]);
-
-
   const fetchDwellTimes = async () => {
     try {
-      const response = await fetch('/api/geolocation/analytics/dwell-time?days=7');
+      const response = await fetch('/api/analytics/geolocation/analytics');
       const data = await response.json();
       setDwellTimes(data.dwell_times || []);
     } catch (error) {
@@ -607,14 +575,12 @@ const MapView = ({
     }
   };
 
-
   useEffect(() => {
     if (showDwellTimes) {
       fetchDwellTimes();
     }
   }, [showDwellTimes]);
 
-  // Subscribe to real-time updates
   useEffect(() => {
     const unsubscribeLocationUpdate = subscribe('location_update', (message) => {
       const locationData = message.data;
@@ -626,37 +592,10 @@ const MapView = ({
               longitude: locationData.longitude,
               altitude: locationData.altitude,
               last_location_update: locationData.timestamp,
-              is_moving: true // Assume moving if location updated
+              is_moving: true
             }
           : user
       ));
-
-      // Add to movement trail
-      setMovementTrails(prev => {
-        const userTrail = prev.find(trail => trail.user_id === locationData.user_id);
-        if (userTrail) {
-          userTrail.points.push({
-            latitude: locationData.latitude,
-            longitude: locationData.longitude,
-            timestamp: locationData.timestamp
-          });
-          // Keep only last 50 points
-          if (userTrail.points.length > 50) {
-            userTrail.points = userTrail.points.slice(-50);
-          }
-        } else {
-          prev.push({
-            user_id: locationData.user_id,
-            color: '#3b82f6',
-            points: [{
-              latitude: locationData.latitude,
-              longitude: locationData.longitude,
-              timestamp: locationData.timestamp
-            }]
-          });
-        }
-        return [...prev];
-      });
     });
 
     const unsubscribeZoneChange = subscribe('zone_change', (message) => {
@@ -692,14 +631,11 @@ const MapView = ({
     };
   }, [subscribe]);
 
-  // Handle zone edit
-  const handleZoneEdit = async (zone) => {
-    // For now, just show an alert. In a full implementation, this would open an edit modal
-    alert(`Edit zone ${zone.name} - Feature not implemented in map view. Use Zones page.`);
-    setSelectedZone(null);
+  const handleZoneEdit = (zone) => {
+    setSelectedZone(zone);
+    setIsEditingZone(true);
   };
 
-  // Handle zone delete
   const handleZoneDelete = async (zone) => {
     if (window.confirm(`Delete zone "${zone.name}"?`)) {
       await deleteZone(zone.id);
@@ -707,23 +643,19 @@ const MapView = ({
     setSelectedZone(null);
   };
 
-  // Handle zone edit save
   const handleZoneEditSave = async (zoneId, formData) => {
     await updateZone(zoneId, formData);
     setIsEditingZone(false);
     setSelectedZone(null);
   };
 
-  // Handle zone edit cancel
   const handleZoneEditCancel = () => {
     setIsEditingZone(false);
     setSelectedZone(null);
   };
 
-  // Map event handlers
   const handleMapClick = async (e) => {
-    if (e.originalEvent.ctrlKey) {
-      // CTRL+click: Create new zone at clicked location
+    if (isDrawing) {
       const newZone = {
         name: `Zone ${liveZones.length + 1}`,
         center_latitude: e.latlng.lat,
@@ -731,18 +663,6 @@ const MapView = ({
         radius_meters: 100,
         zone_type: 'safe_zone'
       };
-      console.log('Creating new zone via CTRL+click:', newZone);
-      await createZone(newZone);
-    } else if (isDrawing) {
-      // Create new zone at clicked location (legacy drawing mode)
-      const newZone = {
-        name: `Zone ${liveZones.length + 1}`,
-        center_latitude: e.latlng.lat,
-        center_longitude: e.latlng.lng,
-        radius_meters: 100,
-        zone_type: 'safe_zone'
-      };
-      console.log('Creating new zone:', newZone);
       await createZone(newZone);
       setIsDrawing(false);
     }
@@ -764,7 +684,6 @@ const MapView = ({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
 
-        {/* Render zones */}
         {liveZones.map((zone) => (
           <Circle
             key={zone.id}
@@ -772,36 +691,18 @@ const MapView = ({
             radius={zone.radius_meters}
             pathOptions={zoneStyles[zone.zone_type] || zoneStyles.safe_zone}
             eventHandlers={{
-              click: (e) => {
-                e.originalEvent.stopPropagation();
-                if (e.originalEvent.ctrlKey) {
-                  // CTRL+click: Edit zone
-                  setSelectedZone(zone);
-                  setIsEditingZone(true);
-                  setIsDrawing(false);
-                  setIsEditing(false);
-                  setIsDeleting(false);
-                } else if (isDeleting) {
-                  handleZoneDelete(zone);
-                } else {
-                  handleZoneClick(zone);
-                }
-              }
+              click: () => handleZoneClick(zone)
             }}
           >
             <Popup>
               <div className="p-2">
                 <h3 className="font-semibold">{zone.name}</h3>
                 <p className="text-sm text-gray-600">{zone.description}</p>
-                <p className="text-xs text-gray-500">
-                  {t(`zones.${zone.zone_type}`)} • {zone.radius_meters}m radius
-                </p>
               </div>
             </Popup>
           </Circle>
         ))}
 
-        {/* Render user markers */}
         {liveUsers.map((user) => (
           <UserMarker
             key={user.id}
@@ -810,7 +711,6 @@ const MapView = ({
           />
         ))}
 
-        {/* Render movement trails */}
         {movementTrails.map((trail, index) => (
           <MovementTrail
             key={index}
@@ -819,60 +719,38 @@ const MapView = ({
           />
         ))}
 
-        {/* Render heatmap layer - commented out due to missing dependency */}
-        {/* {showHeatmap && <HeatmapLayer data={heatmapData} map={mapInstance} />} */}
-
-        {/* Render dwell time overlays */}
+        {showHeatmap && <HeatmapLayer data={heatmapData} map={mapRef.current} />}
         {showDwellTimes && <DwellTimeOverlay dwellTimes={dwellTimes} />}
       </MapContainer>
 
-      {/* Map Controls */}
       <MapControls
-        onDrawMode={() => {
-          setIsDrawing(!isDrawing);
-          setIsEditing(false);
-          setSelectedZone(null);
-        }}
-        onEditMode={() => {
-          setIsEditing(!isEditing);
-          setIsDrawing(false);
-          setSelectedZone(null);
-        }}
-        onDeleteMode={() => {
-          setIsDeleting(!isDeleting);
-          setIsDrawing(false);
-          setIsEditing(false);
-        }}
+        onDrawMode={() => setIsDrawing(!isDrawing)}
         isDrawing={isDrawing}
+        onEditMode={() => setIsEditing(!isEditing)}
         isEditing={isEditing}
+        onDeleteMode={() => setIsDeleting(!isDeleting)}
         showHeatmap={showHeatmap}
         onToggleHeatmap={() => setShowHeatmap(!showHeatmap)}
         showDwellTimes={showDwellTimes}
         onToggleDwellTimes={() => setShowDwellTimes(!showDwellTimes)}
       />
 
-      {/* Zone Info Panel */}
       <ZoneInfoPanel
         zone={selectedZone}
-        onClose={() => {
-          setSelectedZone(null);
-          setIsEditingZone(false);
-        }}
-        onEdit={handleZoneEdit}
-        onDelete={handleZoneDelete}
+        onClose={() => setSelectedZone(null)}
+        onEdit={() => handleZoneEdit(selectedZone)}
+        onDelete={() => handleZoneDelete(selectedZone)}
         isEditing={isEditingZone}
         onSave={handleZoneEditSave}
         onCancel={handleZoneEditCancel}
       />
 
-      {/* Loading overlay */}
       {loading && (
         <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-[2000]">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-cyan"></div>
         </div>
       )}
 
-      {/* Map Status */}
       <Glassmorphism className="absolute bottom-4 left-4 z-[1000] p-3">
         <div className="flex items-center space-x-4 text-sm text-gray-300">
           <div className="flex items-center space-x-1">
@@ -887,11 +765,6 @@ const MapView = ({
             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`}></div>
             <span>{isConnected ? t('map.live') : t('map.offline')}</span>
           </div>
-          {isDrawing && (
-            <div className="text-blue-400">
-              {t('map.draw_zone_cancel')}
-            </div>
-          )}
         </div>
       </Glassmorphism>
     </div>

@@ -154,4 +154,4 @@ async def get_recent_audit_logs(limit: int = 50, current_user = Depends(auth.get
 
     logs = database.get_audit_logs(limit=limit, offset=0)
 
-    return {"recent_logs": logs}
+    return {"activities": logs}

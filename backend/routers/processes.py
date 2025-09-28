@@ -302,13 +302,12 @@ async def delete_process(
 async def execute_process(
     process_id: int,
     trigger_data: Dict[str, Any] = Body(default={}),
-    current_user = Depends(auth.get_current_active_user)
+    current_user: dict = Depends(auth.get_current_active_user)
 ):
     """Manually execute a process."""
     if not auth.check_permission(current_user, "processes:execute"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    # This is a simplified implementation - in production, you'd want a proper execution engine
     conn = database.get_connection()
     cursor = conn.cursor()
 
@@ -318,25 +317,66 @@ async def execute_process(
             INSERT INTO process_executions (process_id, triggered_by, trigger_event, status)
             VALUES (?, ?, ?, 'running')
         ''', (process_id, str(current_user['id']), json.dumps(trigger_data)))
-
         execution_id = cursor.lastrowid
 
         # Get process actions
         cursor.execute('SELECT * FROM process_actions WHERE process_id = ? ORDER BY action_order ASC', (process_id,))
         actions = cursor.fetchall()
 
-        # Simulate execution (in production, this would be async)
+        # Execute actions
         for action in actions:
-            cursor.execute('''
-                INSERT INTO process_execution_steps (execution_id, action_id, status, result)
-                VALUES (?, ?, 'completed', ?)
-            ''', (execution_id, action['id'], json.dumps({"status": "simulated_success"})))
+            action_config = json.loads(action['action_config'])
+            action_type = action['action_type']
+            result = {}
+            status = 'completed'
+            error_message = None
 
-        # Update execution as completed
+            try:
+                if action_type == 'send_message':
+                    to_id = action_config.get('to_id')
+                    message = action_config.get('message')
+                    if to_id and message:
+                        database.add_to_outgoing_queue(to_id, message)
+                        result = {"status": "queued"}
+                    else:
+                        raise ValueError("Missing 'to_id' or 'message' in action config")
+
+                elif action_type == 'create_alert':
+                    database.create_alert(
+                        user_id=action_config.get('user_id'),
+                        zone_id=action_config.get('zone_id'),
+                        alert_type=action_config.get('alert_type', 'process_generated'),
+                        title=action_config.get('title', 'Process Alert'),
+                        message=action_config.get('message', 'Alert from process'),
+                        severity=action_config.get('severity', 'medium')
+                    )
+                    result = {"status": "alert_created"}
+
+                # Add other action handlers here
+                else:
+                    status = 'failed'
+                    error_message = f"Unknown action type: {action_type}"
+
+            except Exception as e:
+                status = 'failed'
+                error_message = str(e)
+                logger.error(f"Error executing action {action['id']}: {e}")
+
+            # Record step execution
+            cursor.execute('''
+                INSERT INTO process_execution_steps (execution_id, action_id, status, result, error_message)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (execution_id, action['id'], status, json.dumps(result), error_message))
+
+        # Update execution status
+        cursor.execute("SELECT COUNT(*) as failed_steps FROM process_execution_steps WHERE execution_id = ? AND status = 'failed'", (execution_id,))
+        failed_steps = cursor.fetchone()['failed_steps']
+        final_status = 'failed' if failed_steps > 0 else 'completed'
+
         cursor.execute('''
-            UPDATE process_executions SET status = 'completed', completed_at = ?, steps_completed = ?, total_steps = ?
+            UPDATE process_executions SET status = ?, completed_at = ?, steps_completed = ?, total_steps = ?
             WHERE id = ?
-        ''', (datetime.now(), len(actions), len(actions), execution_id))
+        ''', (final_status, datetime.now(), len(actions), len(actions), execution_id))
 
         # Update process stats
         cursor.execute('''
@@ -355,7 +395,7 @@ async def execute_process(
             details=f"Manually executed process, execution_id: {execution_id}"
         )
 
-        return {"execution_id": execution_id}
+        return {"execution_id": execution_id, "status": final_status}
 
     except Exception as e:
         conn.rollback()

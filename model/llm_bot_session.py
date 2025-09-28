@@ -20,7 +20,7 @@ class BotLLMSession:
             Your name is Firefly Bot and you help users with communication, navigation, and emergency coordination.
 
             Communication Guidelines:
-            - Keep messages concise (<200 characters for Meshtastic compatibility)
+            - Keep messages concise (<200 characters for Светлячок compatibility)
             - Be helpful, clear, and actionable
             - Use appropriate language based on user preference and context
             - Provide location-aware assistance when possible
@@ -47,7 +47,7 @@ class BotLLMSession:
             Ваше имя - Firefly Bot и вы помогаете пользователям с коммуникацией, навигацией и координацией в чрезвычайных ситуациях.
 
             Рекомендации по коммуникации:
-            - Держите сообщения краткими (<200 символов для совместимости с Meshtastic)
+            - Держите сообщения краткими (<200 символов для совместимости с Светлячок)
             - Будьте полезны, ясны и действенны
             - Используйте соответствующий язык в зависимости от предпочтений пользователя и контекста
             - Предоставляйте помощь с учетом местоположения когда возможно

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import json
+import yaml
 import datetime
 from backend import database, auth
 
@@ -103,19 +104,23 @@ async def send_bot_command(
     command: BotCommand,
     current_user = Depends(auth.get_current_active_user)
 ):
-    """Send a command to the bot."""
+    """Send a command to the bot via the database queue."""
     if not auth.check_permission(current_user, "bot_controls"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    command_id = database.add_to_bot_command_queue(command.command, command.parameters)
+    if not command_id:
+        raise HTTPException(status_code=500, detail="Failed to queue command for the bot")
 
     # Log audit
     database.log_audit(
         admin_user_id=current_user['id'],
         action="command",
         resource="bot",
-        details=f"Sent command: {command.command} with params: {command.parameters}"
+        details=f"Queued command: {command.command} with params: {command.parameters}"
     )
 
-    return {"message": f"Command '{command.command}' logged", "status": "queued"}
+    return {"message": f"Command '{command.command}' queued for execution.", "status": "queued", "command_id": command_id}
 
 @router.get("/sessions")
 async def get_active_sessions(current_user = Depends(auth.get_current_active_user)):
@@ -137,47 +142,47 @@ async def get_active_sessions(current_user = Depends(auth.get_current_active_use
 
 @router.post("/restart")
 async def restart_bot(current_user = Depends(auth.get_current_active_user)):
-    """Restart the bot."""
+    """Logs a restart request for the bot."""
     if not auth.check_permission(current_user, "bot_controls"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     # Log audit
     database.log_audit(
         admin_user_id=current_user['id'],
-        action="restart",
+        action="restart_request",
         resource="bot",
-        details="Initiated bot restart"
+        details="Bot restart requested by admin"
     )
 
-    return {"message": "Bot restart initiated", "status": "restarting"}
+    return {"message": "Bot restart request logged. Please restart the application service manually for changes to take effect.", "status": "logged"}
 
 @router.get("/config")
 async def get_bot_config(current_user = Depends(auth.get_current_active_user)):
-    """Get enhanced bot configuration."""
+    """Get bot-related configuration from config.yaml."""
     if not auth.check_permission(current_user, "bot_controls:read"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    config = {
-        "llm_provider": "openrouter",
-        "model": "gpt-5-nano",
-        "web_search_enabled": False,
-        "tools_enabled": True,
-        "supported_languages": ["en", "ru"],
-        "supported_trigger_types": ["keyword", "emoji", "location", "time", "user_activity"],
-        "supported_channels": ["meshtastic", "websocket", "alert"],
-        "max_trigger_priority": 100,
-        "default_cooldown": 30
+    try:
+        with open('config.yaml', 'r', encoding='utf-8') as f:
+            config_data = yaml.safe_load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="config.yaml not found")
+
+    bot_config = {
+        "llm_provider": config_data.get("llm_provider"),
+        "model": config_data.get("model"),
+        "message_delivery": config_data.get("message_delivery"),
+        "tools": config_data.get("tools")
     }
 
-    # Log audit
     database.log_audit(
         admin_user_id=current_user['id'],
         action="view",
         resource="config",
-        details="Viewed enhanced bot configuration"
+        details="Viewed bot configuration"
     )
 
-    return config
+    return bot_config
 
 # Trigger Management Endpoints
 @router.post("/triggers")
@@ -222,16 +227,16 @@ async def get_triggers(
     current_user = Depends(auth.get_current_active_user)
 ):
     """Get all triggers with pagination."""
-    if not auth.check_permission(current_user, "bot_controls"):
+    if not auth.check_permission(current_user, "bot_controls:read"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     triggers = database.get_all_triggers(limit=limit, offset=offset, active_only=active_only)
 
     # Parse JSON fields
     for trigger in triggers:
-        if trigger['trigger_config']:
+        if trigger.get('trigger_config'):
             trigger['trigger_config'] = json.loads(trigger['trigger_config'])
-        if trigger['conditions']:
+        if trigger.get('conditions'):
             trigger['conditions'] = json.loads(trigger['conditions'])
 
     return {"triggers": triggers, "total": len(triggers)}
@@ -242,7 +247,7 @@ async def get_trigger(
     current_user = Depends(auth.get_current_active_user)
 ):
     """Get a specific trigger."""
-    if not auth.check_permission(current_user, "bot_controls"):
+    if not auth.check_permission(current_user, "bot_controls:read"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     trigger = database.get_trigger(trigger_id)
@@ -250,9 +255,9 @@ async def get_trigger(
         raise HTTPException(status_code=404, detail="Trigger not found")
 
     # Parse JSON fields
-    if trigger['trigger_config']:
+    if trigger.get('trigger_config'):
         trigger['trigger_config'] = json.loads(trigger['trigger_config'])
-    if trigger['conditions']:
+    if trigger.get('conditions'):
         trigger['conditions'] = json.loads(trigger['conditions'])
 
     return trigger
@@ -267,30 +272,16 @@ async def update_trigger(
     if not auth.check_permission(current_user, "bot_controls"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    # Build update data
-    update_data = {}
-    if trigger_update.name is not None:
-        update_data['name'] = trigger_update.name
-    if trigger_update.description is not None:
-        update_data['description'] = trigger_update.description
-    if trigger_update.trigger_type is not None:
-        update_data['trigger_type'] = trigger_update.trigger_type
-    if trigger_update.trigger_config is not None:
-        update_data['trigger_config'] = json.dumps(trigger_update.trigger_config)
-    if trigger_update.conditions is not None:
-        update_data['conditions'] = json.dumps(trigger_update.conditions)
-    if trigger_update.priority is not None:
-        update_data['priority'] = trigger_update.priority
-    if trigger_update.cooldown_seconds is not None:
-        update_data['cooldown_seconds'] = trigger_update.cooldown_seconds
-    if trigger_update.is_active is not None:
-        update_data['is_active'] = trigger_update.is_active
+    update_data = trigger_update.dict(exclude_unset=True)
+    if 'trigger_config' in update_data:
+        update_data['trigger_config'] = json.dumps(update_data['trigger_config'])
+    if 'conditions' in update_data:
+        update_data['conditions'] = json.dumps(update_data['conditions'])
 
     success = database.update_trigger(trigger_id, **update_data)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to update trigger")
 
-    # Log audit
     database.log_audit(
         admin_user_id=current_user['id'],
         action="update",
@@ -314,7 +305,6 @@ async def delete_trigger(
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete trigger")
 
-    # Log audit
     database.log_audit(
         admin_user_id=current_user['id'],
         action="delete",
@@ -335,15 +325,12 @@ async def test_trigger(
     if not auth.check_permission(current_user, "bot_controls"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    # Get trigger configuration
     trigger = database.get_trigger(trigger_id)
     if not trigger:
         raise HTTPException(status_code=404, detail="Trigger not found")
 
-    # Import trigger system for testing
     from backend.triggers import test_trigger_conditions
 
-    # Test the trigger
     result = test_trigger_conditions(
         trigger_config=json.loads(trigger['trigger_config']),
         conditions=json.loads(trigger['conditions']) if trigger['conditions'] else None,
@@ -387,7 +374,6 @@ async def create_response(
     if not response_id:
         raise HTTPException(status_code=500, detail="Failed to create response")
 
-    # Log audit
     database.log_audit(
         admin_user_id=current_user['id'],
         action="create",
@@ -411,13 +397,12 @@ async def get_responses(
 
     responses = database.get_all_responses(limit=limit, offset=offset, active_only=active_only)
 
-    # Parse JSON fields
     for response in responses:
-        if response['variables']:
+        if response.get('variables'):
             response['variables'] = json.loads(response['variables'])
-        if response['target_ids']:
+        if response.get('target_ids'):
             response['target_ids'] = json.loads(response['target_ids'])
-        if response['channels']:
+        if response.get('channels'):
             response['channels'] = json.loads(response['channels'])
 
     return {"responses": responses, "total": len(responses)}
@@ -428,19 +413,18 @@ async def get_response(
     current_user = Depends(auth.get_current_active_user)
 ):
     """Get a specific response."""
-    if not auth.check_permission(current_user, "bot_controls"):
+    if not auth.check_permission(current_user, "bot_controls:read"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
     response = database.get_response(response_id)
     if not response:
         raise HTTPException(status_code=404, detail="Response not found")
 
-    # Parse JSON fields
-    if response['variables']:
+    if response.get('variables'):
         response['variables'] = json.loads(response['variables'])
-    if response['target_ids']:
+    if response.get('target_ids'):
         response['target_ids'] = json.loads(response['target_ids'])
-    if response['channels']:
+    if response.get('channels'):
         response['channels'] = json.loads(response['channels'])
 
     return response
@@ -455,36 +439,15 @@ async def update_response(
     if not auth.check_permission(current_user, "bot_controls"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    # Build update data
-    update_data = {}
-    if response_update.name is not None:
-        update_data['name'] = response_update.name
-    if response_update.description is not None:
-        update_data['description'] = response_update.description
-    if response_update.response_type is not None:
-        update_data['response_type'] = response_update.response_type
-    if response_update.content is not None:
-        update_data['content'] = response_update.content
-    if response_update.variables is not None:
-        update_data['variables'] = json.dumps(response_update.variables)
-    if response_update.language is not None:
-        update_data['language'] = response_update.language
-    if response_update.target_type is not None:
-        update_data['target_type'] = response_update.target_type
-    if response_update.target_ids is not None:
-        update_data['target_ids'] = json.dumps(response_update.target_ids)
-    if response_update.channels is not None:
-        update_data['channels'] = json.dumps(response_update.channels)
-    if response_update.priority is not None:
-        update_data['priority'] = response_update.priority
-    if response_update.is_active is not None:
-        update_data['is_active'] = response_update.is_active
+    update_data = response_update.dict(exclude_unset=True)
+    for field in ['variables', 'target_ids', 'channels']:
+        if field in update_data:
+            update_data[field] = json.dumps(update_data[field])
 
     success = database.update_response(response_id, **update_data)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to update response")
 
-    # Log audit
     database.log_audit(
         admin_user_id=current_user['id'],
         action="update",
@@ -508,7 +471,6 @@ async def delete_response(
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete response")
 
-    # Log audit
     database.log_audit(
         admin_user_id=current_user['id'],
         action="delete",
@@ -532,87 +494,15 @@ async def get_trigger_analytics(
 
     logs = database.get_trigger_logs(limit=limit, offset=offset)
 
-    # Calculate analytics
     analytics = {
         "total_executions": len(logs),
         "successful_executions": len([log for log in logs if log['success']]),
         "failed_executions": len([log for log in logs if not log['success']]),
         "average_execution_time": sum(log['execution_time_ms'] for log in logs if log['execution_time_ms']) / len([log for log in logs if log['execution_time_ms']]) if logs else 0,
-        "recent_logs": logs[:10]  # Last 10 executions
+        "recent_logs": logs[:10]
     }
 
     return analytics
-
-@router.get("/response-suggestions")
-async def get_response_suggestions(
-    trigger_type: str = Query(..., description="Type of trigger (location, emergency, help_request, etc.)"),
-    user_id: Optional[str] = Query(None, description="User ID for context"),
-    zone_id: Optional[str] = Query(None, description="Zone ID for context"),
-    language: str = Query("en", description="Language for suggestions"),
-    count: int = Query(3, ge=1, le=10, description="Number of suggestions to generate"),
-    current_user = Depends(auth.get_current_active_user)
-):
-    """Get AI-powered response suggestions for bot interactions."""
-    if not auth.check_permission(current_user, "bot_controls:read"):
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-
-    try:
-        from backend.bot_responses import response_manager
-
-        # Create mock trigger result for suggestions
-        mock_trigger_result = {
-            'trigger': {
-                'trigger_type': trigger_type,
-                'name': f'{trigger_type} trigger'
-            },
-            'user_id': user_id,
-            'zone_id': zone_id
-        }
-
-        # Generate suggestions
-        suggestions = response_manager.generator.generate_response_suggestions(
-            trigger_result=mock_trigger_result,
-            context={'language': language},
-            language=language,
-            count=count
-        )
-
-        return {
-            "suggestions": suggestions,
-            "trigger_type": trigger_type,
-            "language": language,
-            "count": len(suggestions)
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating suggestions: {str(e)}")
-
-@router.get("/template-functions")
-async def get_template_functions(
-    current_user = Depends(auth.get_current_active_user)
-):
-    """Get available template functions for bot responses."""
-    if not auth.check_permission(current_user, "bot_controls:read"):
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-
-    from backend.bot_responses import response_manager
-
-    functions = list(response_manager.generator.template_functions.keys())
-
-    return {
-        "functions": functions,
-        "descriptions": {
-            "time_of_day": "Get current time of day (morning, afternoon, evening, night)",
-            "weather_info": "Get weather information for current location",
-            "battery_status": "Get battery status description",
-            "distance_to": "Calculate distance to a target location",
-            "random_greeting": "Get a random greeting",
-            "zone_safety": "Get safety information for current zone",
-            "emergency_contacts": "Get emergency contact information",
-            "user_history": "Get user interaction history summary",
-            "predictive_help": "Get predictive help based on user behavior"
-        }
-    }
 
 @router.get("/analytics/responses")
 async def get_response_analytics(
@@ -626,7 +516,6 @@ async def get_response_analytics(
 
     logs = database.get_response_logs(limit=limit, offset=offset)
 
-    # Calculate analytics
     analytics = {
         "total_deliveries": len(logs),
         "successful_deliveries": len([log for log in logs if log['delivery_status'] == 'delivered']),

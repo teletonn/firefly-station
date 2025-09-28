@@ -33,9 +33,7 @@ const Dashboard = () => {
     const unsubscribeStats = subscribe('statistics_update', (message) => {
       setStats(prev => ({
         ...prev,
-        ...message.data.bot_stats,
-        total_alerts: message.data.alert_stats?.total_alerts || prev.total_alerts,
-        active_zones: message.data.zone_stats?.active_zones || prev.active_zones
+        ...message.data
       }));
     });
 
@@ -65,32 +63,13 @@ const Dashboard = () => {
       unsubscribeNewAlert();
       unsubscribeLocationUpdate();
     };
-  }, [subscribe]);
+  }, [subscribe, t]);
 
   const fetchStats = async () => {
     try {
       setError(null);
-      const [usersRes, messagesRes, alertsRes, zonesRes] = await Promise.all([
-        axios.get('/api/users/stats/overview'),
-        axios.get('/api/messages/stats/daily'),
-        axios.get('/api/alerts/stats/overview'),
-        axios.get('/api/zones/stats')
-      ]);
-
-      const usersData = usersRes.data;
-      const messagesData = messagesRes.data;
-      const alertsData = alertsRes.data;
-      const zonesData = zonesRes.data;
-
-      setStats({
-        total_users: usersData.total_users || 0,
-        active_sessions: usersData.active_sessions || 0,
-        online_users: usersData.online_users || 0,
-        messages_today: messagesData.messages_today || 0,
-        bot_status: 'Online', // Assume online for now
-        total_alerts: alertsData.total_alerts || 0,
-        active_zones: zonesData.active_zones || 0
-      });
+      const response = await axios.get('/api/dashboard/stats');
+      setStats(response.data);
     } catch (error) {
       console.error('Error fetching stats:', error);
       setError(t('dashboard.failed_load'));

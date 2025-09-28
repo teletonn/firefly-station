@@ -48,25 +48,29 @@ async def get_user_messages(
 
     return {"messages": messages, "user_id": user_id}
 
-@router.delete("/{message_id}")
+@router.delete("/{message_id}", status_code=204)
 async def delete_message(
     message_id: int,
     current_user = Depends(auth.get_current_active_user)
 ):
     """Delete a message."""
-    if not auth.check_permission(current_user, "messages"):
+    if not auth.check_permission(current_user, "messages:delete"):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    # In a real implementation, you'd delete from database
+    success = database.delete_message(message_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Message not found or could not be deleted")
+
+    # Log audit
     database.log_audit(
         admin_user_id=current_user['id'],
         action="delete",
         resource="message",
         resource_id=str(message_id),
-        details=f"Attempted to delete message {message_id}"
+        details=f"Deleted message {message_id}"
     )
 
-    return {"message": "Message deletion logged"}
+    return
 
 @router.get("/stats/overview")
 async def get_message_stats(current_user = Depends(auth.get_current_active_user)):

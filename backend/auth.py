@@ -102,19 +102,24 @@ def get_current_active_user(current_user = Depends(get_current_user)):
     return current_user
 
 def check_permission(user, required_permission):
-    """Check if user has required permission."""
-    logger.info(f"Checking permission for user {user.get('username', 'unknown')} with role {user.get('role', 'no_role')} for permission {required_permission}")
-    # Get permissions from database for the user's role
+    """Check if a user has a required permission."""
+    logger.info(f"Checking permission for user {user.get('username', 'unknown')} with role {user.get('role', 'no_role')} for permission '{required_permission}'")
+
+    # Get permissions from the database for the user's role
     role_permissions = database.get_role_permissions(user['role'])
-    logger.info(f"Role permissions from DB: {role_permissions}")
-    if user['role'] == 'super_admin':
-        logger.info("Permission granted: super_admin role")
+    logger.info(f"Role permissions from DB for role '{user['role']}': {role_permissions}")
+
+    # The 'super_admin' role has an 'all' permission, which grants access to everything.
+    if "all" in role_permissions:
+        logger.info("Permission granted: 'all' permission found in role.")
         return True
-    # Check if required_permission is in role_permissions or starts with any permission + :
+
+    # Check for specific permissions. This allows for granular control, e.g., 'zones:read', 'zones:write'.
+    # A role with the 'zones' permission will be granted access to both 'zones:read' and 'zones:write'.
     for perm in role_permissions:
-        logger.info(f"Checking if {required_permission} matches {perm} or starts with {perm}:")
         if required_permission == perm or required_permission.startswith(f"{perm}:"):
-            logger.info(f"Permission granted: role {user['role']} has permission {perm} matching {required_permission}")
+            logger.info(f"Permission granted: role '{user['role']}' has permission '{perm}' which satisfies '{required_permission}'")
             return True
-    logger.warning(f"Permission denied for user {user.get('username', 'unknown')} with role {user.get('role', 'no_role')} for permission {required_permission}")
+
+    logger.warning(f"Permission DENIED for user '{user.get('username', 'unknown')}' with role '{user.get('role', 'no_role')}' for permission '{required_permission}'")
     return False

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Users, MessageSquare, Settings, FileText, BarChart3, Map, MapPin, UserCheck, AlertTriangle, Cog, Workflow, TrendingUp, X } from 'lucide-react';
+import { Users, MessageSquare, Settings, FileText, BarChart3, Map, MapPin, UserCheck, AlertTriangle, Cog, Workflow, TrendingUp, X, Bot } from 'lucide-react';
 
 const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
@@ -36,9 +36,10 @@ const Sidebar = ({ isOpen, onClose }) => {
     { path: '/messages', icon: MessageSquare, labelKey: 'nav.messages' },
     { path: '/map', icon: Map, labelKey: 'nav.map' },
     { path: '/zones', icon: MapPin, labelKey: 'nav.zones' },
-    { path: '/bot-controls', icon: Settings, labelKey: 'nav.settings' },
+    { path: '/bot-controls', icon: Bot, labelKey: 'nav.botControls' },
     { path: '/bot-templates', icon: MessageSquare, labelKey: 'nav.botTemplates' },
     { path: '/audit', icon: FileText, labelKey: 'nav.audit' },
+    { path: '/settings', icon: Settings, labelKey: 'nav.settings' },
   ];
 
   return (

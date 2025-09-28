@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
-from .routers import auth, users, messages, bot_controls, audit, websocket, geolocation, zones, alerts, processes, analytics
+from .routers import auth, users, messages, bot_controls, audit, websocket, geolocation, zones, alerts, processes, analytics, dashboard
 from . import database
 
 app = FastAPI(title="Светлячок LLM Admin API", version="1.0.0")
@@ -22,6 +22,7 @@ database.init_db()
 
 # Include routers first
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(users.router, prefix="/api/users", tags=["User Management"])
 app.include_router(messages.router, prefix="/api/messages", tags=["Message Monitoring"])
 app.include_router(bot_controls.router, prefix="/api/bot", tags=["Bot Controls"])

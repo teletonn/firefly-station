@@ -22,6 +22,7 @@ const AlertConfig = lazy(() => import('./components/AlertConfig'));
 const Processes = lazy(() => import('./components/Processes'));
 const Analytics = lazy(() => import('./components/Analytics'));
 const BotResponseTemplates = lazy(() => import('./components/BotResponseTemplates'));
+const Settings = lazy(() => import('./components/Settings'));
 
 function AppContent() {
   const { isAuthenticated, loading } = useAuth();
@@ -61,6 +62,7 @@ function AppContent() {
               <Route path="/alert-config" element={<AlertConfig />} />
               <Route path="/processes" element={<Processes />} />
               <Route path="/bot-controls" element={<BotControls />} />
+              <Route path="/settings" element={<Settings />} />
               <Route path="/audit" element={<AuditLogs />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/bot-templates" element={<BotResponseTemplates />} />

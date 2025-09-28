@@ -41,12 +41,12 @@ def init_admin_user():
         # Hash the default password
         hashed_password = get_password_hash('admin123')
 
-        # Create the admin user
+        # Create the admin user with super_admin role
         admin_id = create_admin_user(
             username='admin',
             email='admin@localhost',
             hashed_password=hashed_password,
-            role='admin'
+            role='super_admin'
         )
 
         if admin_id:
@@ -54,7 +54,7 @@ def init_admin_user():
             logger.info("  - Username: admin")
             logger.info("  - Password: admin123")
             logger.info("  - Email: admin@localhost")
-            logger.info("  - Role: admin")
+            logger.info("  - Role: super_admin")
             logger.info("  - User ID: " + str(admin_id))
             logger.warning("⚠️  IMPORTANT: Please change the default password after first login!")
             return True

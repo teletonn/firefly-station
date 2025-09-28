@@ -58,7 +58,7 @@ class ChunkDeliveryManager:
     def split_message_into_chunks(self, message, message_id):
         """Split message into chunks with metadata, respecting byte limits."""
         message_bytes = len(message.encode('utf-8'))
-        max_payload_bytes = 200  # Meshtastic LoRa payload limit
+        max_payload_bytes = 200  # Светлячок LoRa payload limit
 
         if message_bytes <= max_payload_bytes:
             # Return single chunk without metadata
@@ -137,10 +137,10 @@ class ChunkDeliveryManager:
         chunk_json = json.dumps(chunk_data, ensure_ascii=False)
         chunk_bytes = chunk_json.encode('utf-8')
 
-        # Check if chunk fits within Meshtastic payload limit
+        # Check if chunk fits within Светлячок payload limit
         max_payload_bytes = 200
         if len(chunk_bytes) > max_payload_bytes:
-            print(f"Error: Chunk too large ({len(chunk_bytes)} bytes), exceeds Meshtastic limit of {max_payload_bytes}")
+            print(f"Error: Chunk too large ({len(chunk_bytes)} bytes), exceeds Светлячок limit of {max_payload_bytes}")
             database.mark_chunk_failed(chunk_id)
             return False
 
@@ -676,6 +676,41 @@ def onReceive(packet, interface):  # called when a packet arrives
 def onConnection(interface, topic=pub.AUTO_TOPIC): # called when we (re)connect to the radio
     print("Успешно подключен к устройству!")
 
+def process_outgoing_queue(interface):
+    """Process the outgoing message queue."""
+    pending_messages = database.get_pending_outgoing_messages()
+    for msg in pending_messages:
+        try:
+            print(f"Sending queued message to {msg['to_id']}: {msg['message']}")
+            send_message(msg['to_id'], msg['message'], interface)
+            database.mark_outgoing_message_sent(msg['id'])
+        except Exception as e:
+            print(f"Failed to send queued message {msg['id']}: {e}")
+
+def handle_command(command, params):
+    """Handle a command from the command queue."""
+    if command == 'reload_config':
+        print("Reloading configuration...")
+        # In a real app, you would reload the config from file
+    elif command == 'clear_cache':
+        print("Clearing cache...")
+        # In a real app, you would clear the relevant caches
+    else:
+        print(f"Unknown command: {command}")
+
+def process_bot_commands():
+    """Process commands from the bot command queue."""
+    commands = database.get_pending_bot_commands()
+    for cmd in commands:
+        try:
+            print(f"Processing command {cmd['command']} with params {cmd['parameters']}")
+            params = json.loads(cmd['parameters']) if cmd['parameters'] else {}
+            handle_command(cmd['command'], params)
+            database.mark_bot_command_processed(cmd['id'], 'processed')
+        except Exception as e:
+            print(f"Failed to process command {cmd['id']}: {e}")
+            database.mark_bot_command_processed(cmd['id'], 'failed')
+
 def run_bot(shutdown_event):
     pub.subscribe(onReceive, "meshtastic.receive")
     pub.subscribe(onConnection, "meshtastic.connection.established")
@@ -684,7 +719,9 @@ def run_bot(shutdown_event):
 
     try:
         while not shutdown_event.is_set():
-            time.sleep(1)
+            process_outgoing_queue(interface)
+            process_bot_commands()
+            time.sleep(5)  # Check queues every 5 seconds
     finally:
         interface.close()
 
