@@ -241,6 +241,22 @@ async def get_geolocation_analytics(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting geolocation analytics: {str(e)}")
 
+@router.get("/geolocation/heatmap")
+async def get_geolocation_heatmap(
+    days: int = Query(30, ge=1, le=365),
+    current_user: dict = Depends(auth.get_current_active_user)
+):
+    """Get location heatmap data."""
+    if not auth.check_permission(current_user, "analytics:read"):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    try:
+        heatmap_data = database.get_location_heatmap_data(days)
+        return heatmap_data
+    except Exception as e:
+        logger.error(f"Error getting heatmap data: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve heatmap data.")
+
 @router.get("/performance/metrics")
 async def get_performance_metrics(
     period: str = Query("24h", regex="^(1h|24h|7d|30d|90d)$"),

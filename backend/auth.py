@@ -6,11 +6,16 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from . import database
 import logging
+import yaml
 
 logger = logging.getLogger(__name__)
 
+# Load config
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+
 # JWT settings
-SECRET_KEY = "your-secret-key-here"  # In production, use environment variable
+SECRET_KEY = config.get("security", {}).get("secret_key", "default_secret_key_if_not_found")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 

@@ -101,7 +101,7 @@ class EndToEndWorkflowTest(unittest.TestCase):
         print("✅ Complete user registration workflow test passed")
 
     def test_02_emergency_zone_setup_workflow(self):
-        """Test complete emergency zone setup workflow."""
+        """Test complete emergency zone and alert rule setup workflow."""
         print("\n🚨 Testing emergency zone setup workflow...")
         # Step 1: Register admin
         response = self.client.post("/api/auth/register", json=self.admin_user)
@@ -118,15 +118,31 @@ class EndToEndWorkflowTest(unittest.TestCase):
             "radius_meters": 1000,
             "zone_type": "danger_zone"
         }
-
         response = self.client.post("/api/zones", json=zone_data, headers=headers)
         self.assertEqual(response.status_code, 200, f"Failed to create zone: {response.text}")
-        zone_result = response.json()
-        zone_id = zone_result["id"]
+        zone_id = response.json()["id"]
 
-        # Step 3: Verify zone exists
-        response = self.client.get(f"/api/zones/{zone_id}", headers=headers)
+        # Step 3: Create an alert rule for entering the zone
+        alert_rule_data = {
+            "name": "Zone Entry Alert Rule",
+            "description": "Trigger an alert when a user enters the emergency zone.",
+            "alert_type": "zone_entry",
+            "severity": "high",
+            "zone_id": zone_id,
+            "conditions": {"min_speed_kph": 5},
+            "target_groups": [],
+            "escalation_rules": {}
+        }
+        response = self.client.post("/api/alerts/rules/", json=alert_rule_data, headers=headers)
+        self.assertEqual(response.status_code, 200, f"Failed to create alert rule: {response.text}")
+        rule_id = response.json()["rule_id"]
+
+        # Step 4: Verify alert rule exists
+        response = self.client.get(f"/api/alerts/rules/{rule_id}", headers=headers)
         self.assertEqual(response.status_code, 200)
+        rule_details = response.json()
+        self.assertEqual(rule_details["name"], "Zone Entry Alert Rule")
+        self.assertEqual(rule_details["zone_id"], zone_id)
         print("✅ Emergency zone setup workflow test passed")
 
     def test_03_field_user_emergency_response_workflow(self):
@@ -176,7 +192,7 @@ class EndToEndWorkflowTest(unittest.TestCase):
         print("✅ Field user emergency response workflow test passed")
 
     def test_04_user_group_management_workflow(self):
-        """Test user group and zone management workflow."""
+        """Test user group creation, membership, and deletion workflow."""
         print("\n👥 Testing user group management workflow...")
         # Step 1: Register admin
         response = self.client.post("/api/auth/register", json=self.admin_user)
@@ -190,18 +206,37 @@ class EndToEndWorkflowTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200, f"Failed to create group: {response.text}")
         group_id = response.json()["id"]
 
-        # Step 3: Create a mesh user directly in the database for testing
-        database.insert_or_update_user(self.mesh_user_id, {"user": {"longName": "Test Mesh User"}})
-
-        # Step 4: Add user to group
-        response = self.client.post(f"/api/users/groups/{group_id}/users/{self.mesh_user_id}", headers=admin_headers)
-        self.assertEqual(response.status_code, 200, f"Failed to add user to group: {response.text}")
-
-        # Step 5: Verify user is in group
+        # Step 3: Verify group was created and is empty
         response = self.client.get(f"/api/users/groups/{group_id}", headers=admin_headers)
         self.assertEqual(response.status_code, 200)
         group_details = response.json()
-        self.assertIn(self.mesh_user_id, [user['id'] for user in group_details['users']])
+        self.assertEqual(group_details["name"], "Test Group")
+        self.assertEqual(len(group_details["users"]), 0, "New group should be empty")
+
+        # Step 4: Create a mesh user directly in the database for testing
+        database.insert_or_update_user(self.mesh_user_id, {"user": {"longName": "Test Mesh User"}})
+
+        # Step 5: Add user to group
+        response = self.client.post(f"/api/users/groups/{group_id}/users/{self.mesh_user_id}", headers=admin_headers)
+        self.assertEqual(response.status_code, 200, f"Failed to add user to group: {response.text}")
+
+        # Step 6: Verify user is in group
+        response = self.client.get(f"/api/users/groups/{group_id}", headers=admin_headers)
+        self.assertEqual(response.status_code, 200)
+        group_details = response.json()
+        self.assertEqual(len(group_details["users"]), 1, "Group should have one user")
+        self.assertEqual(group_details["users"][0]["id"], self.mesh_user_id)
+
+        # Step 7: Remove user from group
+        response = self.client.delete(f"/api/users/groups/{group_id}/users/{self.mesh_user_id}", headers=admin_headers)
+        self.assertEqual(response.status_code, 200, f"Failed to remove user from group: {response.text}")
+
+        # Step 8: Verify user is no longer in group
+        response = self.client.get(f"/api/users/groups/{group_id}", headers=admin_headers)
+        self.assertEqual(response.status_code, 200)
+        group_details = response.json()
+        self.assertEqual(len(group_details["users"]), 0, "Group should be empty after removing user")
+
         print("✅ User group management workflow test passed")
 
     def test_05_process_execution_workflow(self):

@@ -125,9 +125,9 @@ def init_db():
             VALUES ('super_admin', '["all"]'), ('admin', '["users", "messages", "audit", "bot_controls", "zones", "alerts", "analytics", "processes"]'), ('viewer', '["users:read", "messages:read", "audit:read"]')
         ''')
 
-        # Update admin role permissions if needed
+        # Update admin role permissions to a cleaner, more manageable set
         cursor.execute('''
-            UPDATE roles SET permissions = '["all", "dashboard:read", "users", "users:read", "messages", "messages:read", "audit", "audit:read", "bot_controls", "bot_controls:read", "zones", "zones:read", "alerts", "alerts:read", "alerts:create", "alerts:acknowledge", "alerts:resolve", "alerts:update", "alerts:delete", "alerts:create_rule", "alerts:read_rule", "alerts:update_rule", "alerts:delete_rule", "processes", "processes:read", "processes:create", "processes:update", "processes:delete", "processes:execute", "analytics", "analytics:read"]' WHERE name = 'admin'
+            UPDATE roles SET permissions = '["dashboard", "users", "messages", "audit", "bot_controls", "zones", "alerts", "processes", "analytics"]' WHERE name = 'admin'
         ''')
 
         # Create zones table for geofencing
@@ -163,6 +163,14 @@ def init_db():
         ''')
 
         # Create user_group_members table for many-to-many relationship
+        try:
+            cursor.execute("PRAGMA table_info(user_groups)")
+            columns = [column['name'] for column in cursor.fetchall()]
+            if 'parent_group_id' not in columns:
+                cursor.execute('ALTER TABLE user_groups ADD COLUMN parent_group_id INTEGER REFERENCES user_groups(id)')
+        except sqlite3.Error as e:
+            logger.warning(f"Failed to add parent_group_id to user_groups (column might already exist): {e}")
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_group_members (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

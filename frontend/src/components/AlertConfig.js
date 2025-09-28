@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import GlassCard from './ui/GlassCard';
 import GlassButton from './ui/GlassButton';
 
 const AlertConfig = () => {
+  const { t } = useTranslation();
   const [zones, setZones] = useState([]);
   const [groups, setGroups] = useState([]);
   const [alertRules, setAlertRules] = useState([]);
@@ -12,7 +14,6 @@ const AlertConfig = () => {
   const [showCreateRuleModal, setShowCreateRuleModal] = useState(false);
   const [editingRule, setEditingRule] = useState(null);
 
-  // Form state for alert rules
   const [ruleForm, setRuleForm] = useState({
     name: '',
     description: '',
@@ -51,14 +52,14 @@ const AlertConfig = () => {
     try {
       const response = await fetch('/api/zones/');
       if (!response.ok) {
-        throw new Error(`Failed to fetch zones: ${response.status} ${response.statusText}`);
+        throw new Error(`${t('alertConfig.error_fetching_zones')}: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
       setZones(data.zones || []);
       setError(null);
     } catch (error) {
       console.error('Error fetching zones:', error);
-      setError('Failed to load zones. Please try again.');
+      setError(t('alertConfig.error_loading_zones'));
     }
   };
 
@@ -66,14 +67,14 @@ const AlertConfig = () => {
     try {
       const response = await fetch('/api/users/groups');
       if (!response.ok) {
-        throw new Error(`Failed to fetch groups: ${response.status} ${response.statusText}`);
+        throw new Error(`${t('alertConfig.error_fetching_groups')}: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
       setGroups(data.groups || []);
       setError(null);
     } catch (error) {
       console.error('Error fetching groups:', error);
-      setError('Failed to load user groups. Please try again.');
+      setError(t('alertConfig.error_loading_groups'));
     }
   };
 
@@ -81,14 +82,14 @@ const AlertConfig = () => {
     try {
       const response = await fetch('/api/alerts/rules/');
       if (!response.ok) {
-        throw new Error(`Failed to fetch alert rules: ${response.status} ${response.statusText}`);
+        throw new Error(`${t('alertConfig.error_fetching_rules')}: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
       setAlertRules(data.rules || []);
       setError(null);
     } catch (error) {
       console.error('Error fetching alert rules:', error);
-      setError('Failed to load alert rules. Please try again.');
+      setError(t('alertConfig.error_loading_rules'));
     } finally {
       setLoading(false);
     }
@@ -106,19 +107,17 @@ const AlertConfig = () => {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        console.log('Alert rule created:', data);
         setShowCreateRuleModal(false);
         resetRuleForm();
-        fetchAlertRules(); // Refresh the list
+        fetchAlertRules();
         setError(null);
       } else {
-        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        setError(`Failed to create alert rule: ${errorData.detail || response.statusText}`);
+        const errorData = await response.json().catch(() => ({ detail: t('common.unknown_error') }));
+        setError(`${t('alertConfig.error_creating_rule')}: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Error creating alert rule:', error);
-      setError('Network error while creating alert rule. Please try again.');
+      setError(t('alertConfig.error_network_creating'));
     }
   };
 
@@ -134,24 +133,22 @@ const AlertConfig = () => {
       });
 
       if (response.ok) {
-        console.log('Alert rule updated');
         setEditingRule(null);
         resetRuleForm();
-        fetchAlertRules(); // Refresh the list
+        fetchAlertRules();
         setError(null);
       } else {
-        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        setError(`Failed to update alert rule: ${errorData.detail || response.statusText}`);
+        const errorData = await response.json().catch(() => ({ detail: t('common.unknown_error') }));
+        setError(`${t('alertConfig.error_updating_rule')}: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Error updating alert rule:', error);
-      setError('Network error while updating alert rule. Please try again.');
+      setError(t('alertConfig.error_network_updating'));
     }
   };
 
   const handleDeleteRule = async (ruleId) => {
-    // In a real app, you'd show a proper confirmation dialog
-    if (!window.confirm('Are you sure you want to delete this alert rule?')) {
+    if (!window.confirm(t('alertConfig.confirmDelete'))) {
       return;
     }
 
@@ -161,16 +158,15 @@ const AlertConfig = () => {
       });
 
       if (response.ok) {
-        console.log('Alert rule deleted');
-        fetchAlertRules(); // Refresh the list
+        fetchAlertRules();
         setError(null);
       } else {
-        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-        setError(`Failed to delete alert rule: ${errorData.detail || response.statusText}`);
+        const errorData = await response.json().catch(() => ({ detail: t('common.unknown_error') }));
+        setError(`${t('alertConfig.error_deleting_rule')}: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Error deleting alert rule:', error);
-      setError('Network error while deleting alert rule. Please try again.');
+      setError(t('alertConfig.error_network_deleting'));
     }
   };
 
@@ -206,7 +202,6 @@ const AlertConfig = () => {
 
   const openEditModal = (rule) => {
     setEditingRule(rule);
-    // Parse JSON fields back to objects
     const parsedRule = {
       ...rule,
       conditions: rule.conditions ? JSON.parse(rule.conditions) : {
@@ -283,18 +278,17 @@ const AlertConfig = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-white">Alert Configuration</h1>
+        <h1 className="text-3xl font-bold text-white">{t('alertConfig.title')}</h1>
         <GlassButton
           onClick={() => setShowCreateRuleModal(true)}
           variant="primary"
           className="flex items-center space-x-2"
         >
           <span>+</span>
-          <span>Create Alert Rule</span>
+          <span>{t('alertConfig.createRule')}</span>
         </GlassButton>
       </div>
 
-      {/* Error Display */}
       {error && (
         <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
           <div className="flex items-center justify-between">
@@ -302,7 +296,7 @@ const AlertConfig = () => {
               <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="text-red-400 font-medium">Error</span>
+              <span className="text-red-400 font-medium">{t('common.error')}</span>
             </div>
             <GlassButton
               onClick={() => {
@@ -314,19 +308,18 @@ const AlertConfig = () => {
               variant="secondary"
               className="text-sm"
             >
-              Retry
+              {t('common.retry')}
             </GlassButton>
           </div>
           <p className="text-red-300 mt-2">{error}</p>
         </div>
       )}
 
-      {/* Tabs */}
       <div className="flex space-x-1 bg-dark-800/50 p-1 rounded-lg">
         {[
-          { id: 'rules', label: 'Alert Rules' },
-          { id: 'escalation', label: 'Escalation Rules' },
-          { id: 'notifications', label: 'Notification Settings' }
+          { id: 'rules', label: t('alertConfig.rules') },
+          { id: 'escalation', label: t('alertConfig.escalation') },
+          { id: 'notifications', label: t('alertConfig.notifications') }
         ].map((tab) => (
           <button
             key={tab.id}
@@ -342,11 +335,9 @@ const AlertConfig = () => {
         ))}
       </div>
 
-      {/* Alert Rules Tab */}
       {activeTab === 'rules' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Rules List */}
-          <GlassCard title="Alert Rules" icon={<RulesIcon />}>
+          <GlassCard title={t('alertConfig.rules')} icon={<RulesIcon />}>
             <div className="space-y-3">
               {alertRules.map((rule) => (
                 <div
@@ -363,44 +354,43 @@ const AlertConfig = () => {
                         onClick={() => openEditModal(rule)}
                         className="text-accent-cyan hover:text-accent-cyan/80 text-sm"
                       >
-                        Edit
+                        {t('common.edit')}
                       </button>
                       <button
                         onClick={() => handleDeleteRule(rule.id)}
                         className="text-red-400 hover:text-red-300 text-sm"
                       >
-                        Delete
+                        {t('common.delete')}
                       </button>
                     </div>
                   </div>
                   <div className="flex items-center space-x-4 text-xs text-gray-400">
-                    <span>Type: {rule.alert_type}</span>
-                    <span>Severity: {rule.severity}</span>
-                    <span>Zone: {zones.find(z => z.id === parseInt(rule.zone_id))?.name || 'All'}</span>
+                    <span>{t('alertConfig.typeLabel')}: {rule.alert_type}</span>
+                    <span>{t('alertConfig.severityLabel')}: {rule.severity}</span>
+                    <span>{t('alertConfig.zoneLabel')}: {zones.find(z => z.id === parseInt(rule.zone_id))?.name || t('alertConfig.allZones')}</span>
                   </div>
                 </div>
               ))}
               {alertRules.length === 0 && (
-                <p className="text-gray-400 text-center py-8">No alert rules configured</p>
+                <p className="text-gray-400 text-center py-8">{t('alertConfig.noRules')}</p>
               )}
             </div>
           </GlassCard>
 
-          {/* Quick Stats */}
-          <GlassCard title="Rule Statistics" icon={<StatsIcon />}>
+          <GlassCard title={t('alertConfig.statistics')} icon={<StatsIcon />}>
             <div className="space-y-4">
               <div className="flex justify-between">
-                <span className="text-gray-300">Total Rules:</span>
+                <span className="text-gray-300">{t('alertConfig.totalRules')}:</span>
                 <span className="text-white font-semibold">{alertRules.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-300">Active Rules:</span>
+                <span className="text-gray-300">{t('alertConfig.activeRules')}:</span>
                 <span className="text-green-400 font-semibold">
                   {alertRules.filter(r => r.is_active).length}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-300">Rules with Escalation:</span>
+                <span className="text-gray-300">{t('alertConfig.rulesWithEscalation')}:</span>
                 <span className="text-accent-cyan font-semibold">
                   {alertRules.filter(r => {
                     try {
@@ -417,33 +407,29 @@ const AlertConfig = () => {
         </div>
       )}
 
-      {/* Escalation Rules Tab */}
       {activeTab === 'escalation' && (
-        <GlassCard title="Escalation Rule Builder" icon={<EscalationIcon />}>
+        <GlassCard title={t('alertConfig.escalationBuilder')} icon={<EscalationIcon />}>
           <div className="space-y-6">
             <div className="bg-dark-800/30 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold text-white mb-4">Default Escalation Template</h3>
+              <h3 className="text-lg font-semibold text-white mb-4">{t('alertConfig.defaultTemplate')}</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 bg-dark-800/50 rounded">
                   <div>
-                    <span className="text-white font-medium">Step 1:</span>
-                    <span className="text-gray-300 ml-2">Initial Alert (0 min)</span>
+                    <span className="text-white font-medium">{t('alertConfig.step1Initial')}</span>
                   </div>
-                  <span className="text-xs text-gray-400">WebSocket</span>
+                  <span className="text-xs text-gray-400">{t('alertConfig.websocket')}</span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-dark-800/50 rounded">
                   <div>
-                    <span className="text-white font-medium">Step 2:</span>
-                    <span className="text-gray-300 ml-2">Escalate to Supervisors (5 min)</span>
+                    <span className="text-white font-medium">{t('alertConfig.step2Supervisors')}</span>
                   </div>
-                  <span className="text-xs text-gray-400">Email + WebSocket</span>
+                  <span className="text-xs text-gray-400">{t('alertConfig.emailWs')}</span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-dark-800/50 rounded">
                   <div>
-                    <span className="text-white font-medium">Step 3:</span>
-                    <span className="text-gray-300 ml-2">Emergency Response (15 min)</span>
+                    <span className="text-white font-medium">{t('alertConfig.step3Emergency')}</span>
                   </div>
-                  <span className="text-xs text-gray-400">SMS + Email + WebSocket</span>
+                  <span className="text-xs text-gray-400">{t('alertConfig.smsEmailWs')}</span>
                 </div>
               </div>
             </div>
@@ -451,16 +437,15 @@ const AlertConfig = () => {
         </GlassCard>
       )}
 
-      {/* Notification Settings Tab */}
       {activeTab === 'notifications' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <GlassCard title="Notification Channels" icon={<NotificationIcon />}>
+          <GlassCard title={t('alertConfig.notificationChannels')} icon={<NotificationIcon />}>
             <div className="space-y-4">
               {[
-                { name: 'WebSocket', description: 'Real-time browser notifications', enabled: true },
-                { name: 'Email', description: 'Email notifications for escalation', enabled: true },
-                { name: 'SMS', description: 'SMS notifications for critical alerts', enabled: false },
-                { name: 'Push Notifications', description: 'Mobile push notifications', enabled: false }
+                { name: t('alertConfig.websocket'), description: t('alertConfig.wsDescription'), enabled: true },
+                { name: t('alertConfig.email'), description: t('alertConfig.emailDescription'), enabled: true },
+                { name: t('alertConfig.sms'), description: t('alertConfig.smsDescription'), enabled: false },
+                { name: t('alertConfig.push'), description: t('alertConfig.pushDescription'), enabled: false }
               ].map((channel) => (
                 <div key={channel.name} className="flex items-center justify-between p-3 bg-dark-800/30 rounded-lg">
                   <div>
@@ -480,24 +465,24 @@ const AlertConfig = () => {
             </div>
           </GlassCard>
 
-          <GlassCard title="Notification Preferences" icon={<PreferencesIcon />}>
+          <GlassCard title={t('alertConfig.notificationPreferences')} icon={<PreferencesIcon />}>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Default Notification Sound
+                  {t('alertConfig.defaultSound')}
                 </label>
                 <select className="w-full px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white focus:border-accent-cyan focus:outline-none">
-                  <option>Default</option>
-                  <option>Chime</option>
-                  <option>Bell</option>
-                  <option>Alert</option>
-                  <option>None</option>
+                  <option>{t('common.default')}</option>
+                  <option>{t('common.chime')}</option>
+                  <option>{t('common.bell')}</option>
+                  <option>{t('common.alert')}</option>
+                  <option>{t('common.none')}</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Auto-dismiss after (seconds)
+                  {t('alertConfig.autoDismiss')}
                 </label>
                 <input
                   type="number"
@@ -508,8 +493,8 @@ const AlertConfig = () => {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-medium text-white">Desktop Notifications</h4>
-                  <p className="text-sm text-gray-300">Show browser notifications</p>
+                  <h4 className="font-medium text-white">{t('alertConfig.desktopNotifications')}</h4>
+                  <p className="text-sm text-gray-300">{t('alertConfig.desktopNotificationsDescription')}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" className="sr-only peer" defaultChecked />
@@ -521,19 +506,18 @@ const AlertConfig = () => {
         </div>
       )}
 
-      {/* Create/Edit Rule Modal */}
       {(showCreateRuleModal || editingRule) && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <GlassCard className="w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
             <form onSubmit={editingRule ? handleEditRule : handleCreateRule}>
               <h2 className="text-xl font-bold text-white mb-4">
-                {editingRule ? 'Edit Alert Rule' : 'Create Alert Rule'}
+                {editingRule ? t('alertConfig.editRule') : t('alertConfig.createRule')}
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Rule Name
+                    {t('alertConfig.ruleName')}
                   </label>
                   <input
                     type="text"
@@ -546,47 +530,47 @@ const AlertConfig = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Alert Type
+                    {t('alertConfig.alertType')}
                   </label>
                   <select
                     value={ruleForm.alert_type}
                     onChange={(e) => setRuleForm({ ...ruleForm, alert_type: e.target.value })}
                     className="w-full px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white focus:border-accent-cyan focus:outline-none"
                   >
-                    <option value="zone_entry">Zone Entry</option>
-                    <option value="zone_exit">Zone Exit</option>
-                    <option value="speeding">Speeding</option>
-                    <option value="offline">Offline</option>
-                    <option value="battery_low">Battery Low</option>
+                    <option value="zone_entry">{t('alerts.zone_entry')}</option>
+                    <option value="zone_exit">{t('alerts.zone_exit')}</option>
+                    <option value="speeding">{t('alerts.speeding')}</option>
+                    <option value="offline">{t('alerts.offline')}</option>
+                    <option value="battery_low">{t('alerts.battery_low')}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Severity
+                    {t('alerts.severity')}
                   </label>
                   <select
                     value={ruleForm.severity}
                     onChange={(e) => setRuleForm({ ...ruleForm, severity: e.target.value })}
                     className="w-full px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white focus:border-accent-cyan focus:outline-none"
                   >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
+                    <option value="low">{t('alerts.severity.low')}</option>
+                    <option value="medium">{t('alerts.severity.medium')}</option>
+                    <option value="high">{t('alerts.severity.high')}</option>
+                    <option value="critical">{t('alerts.severity.critical')}</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Zone
+                    {t('zones.title')}
                   </label>
                   <select
                     value={ruleForm.zone_id}
                     onChange={(e) => setRuleForm({ ...ruleForm, zone_id: e.target.value })}
                     className="w-full px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white focus:border-accent-cyan focus:outline-none"
                   >
-                    <option value="">All Zones</option>
+                    <option value="">{t('alertConfig.allZones')}</option>
                     {zones.map((zone) => (
                       <option key={zone.id} value={zone.id}>{zone.name}</option>
                     ))}
@@ -596,7 +580,7 @@ const AlertConfig = () => {
 
               <div className="mt-4">
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Description
+                  {t('alertConfig.ruleDescription')}
                 </label>
                 <textarea
                   value={ruleForm.description}
@@ -606,10 +590,9 @@ const AlertConfig = () => {
                 />
               </div>
 
-              {/* Target Groups */}
               <div className="mt-4">
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Target Groups
+                  {t('alertConfig.targetGroups')}
                 </label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {groups.map((group) => (
@@ -631,10 +614,9 @@ const AlertConfig = () => {
                 </div>
               </div>
 
-              {/* Escalation Rules */}
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-white">Escalation Rules</h3>
+                  <h3 className="text-lg font-semibold text-white">{t('alertConfig.escalation')}</h3>
                   <label className="flex items-center space-x-2">
                     <input
                       type="checkbox"
@@ -648,7 +630,7 @@ const AlertConfig = () => {
                       })}
                       className="rounded border-dark-600 text-accent-cyan focus:ring-accent-cyan"
                     />
-                    <span className="text-gray-300">Enable Escalation</span>
+                    <span className="text-gray-300">{t('alertConfig.enableEscalation')}</span>
                   </label>
                 </div>
 
@@ -657,14 +639,14 @@ const AlertConfig = () => {
                     {ruleForm.escalation_rules.steps.map((step, index) => (
                       <div key={index} className="p-4 bg-dark-800/30 rounded-lg border border-dark-600">
                         <div className="flex justify-between items-center mb-3">
-                          <h4 className="font-medium text-white">Step {step.step_number}</h4>
+                          <h4 className="font-medium text-white">{t('alertConfig.stepNumber')} {step.step_number}</h4>
                           {index > 0 && (
                             <button
                               type="button"
                               onClick={() => removeEscalationStep(index)}
                               className="text-red-400 hover:text-red-300 text-sm"
                             >
-                              Remove
+                              {t('alertConfig.removeStep')}
                             </button>
                           )}
                         </div>
@@ -672,7 +654,7 @@ const AlertConfig = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
-                              Delay (seconds)
+                              {t('alertConfig.delaySeconds')}
                             </label>
                             <input
                               type="number"
@@ -684,7 +666,7 @@ const AlertConfig = () => {
 
                           <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
-                              Notification Channels
+                              {t('alertConfig.notificationChannels')}
                             </label>
                             <div className="space-y-2">
                               {['websocket', 'email', 'sms'].map((channel) => (
@@ -709,13 +691,13 @@ const AlertConfig = () => {
 
                         <div className="mt-3">
                           <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Custom Message Template
+                            {t('alertConfig.messageTemplate')}
                           </label>
                           <input
                             type="text"
                             value={step.message_template}
                             onChange={(e) => updateEscalationStep(index, 'message_template', e.target.value)}
-                            placeholder="Custom escalation message (optional)"
+                            placeholder={t('alertConfig.customMessagePlaceholder')}
                             className="w-full px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white focus:border-accent-cyan focus:outline-none"
                           />
                         </div>
@@ -728,7 +710,7 @@ const AlertConfig = () => {
                       variant="secondary"
                       className="w-full"
                     >
-                      Add Escalation Step
+                      {t('alertConfig.addStep')}
                     </GlassButton>
                   </div>
                 )}
@@ -736,7 +718,7 @@ const AlertConfig = () => {
 
               <div className="flex space-x-3 mt-6">
                 <GlassButton type="submit" variant="primary">
-                  {editingRule ? 'Update Rule' : 'Create Rule'}
+                  {editingRule ? t('alertConfig.updateRule') : t('alertConfig.createRule')}
                 </GlassButton>
                 <GlassButton
                   type="button"
@@ -747,7 +729,7 @@ const AlertConfig = () => {
                     resetRuleForm();
                   }}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </GlassButton>
               </div>
             </form>

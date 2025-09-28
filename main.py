@@ -687,9 +687,20 @@ def process_outgoing_queue(interface):
         except Exception as e:
             print(f"Failed to send queued message {msg['id']}: {e}")
 
-def handle_command(command, params):
+def handle_command(command, params, interface, shutdown_event):
     """Handle a command from the command queue."""
-    if command == 'reload_config':
+    if command == 'RESTART':
+        print("Received RESTART command. Shutting down...")
+        shutdown_event.set()
+    elif command == 'SEND_MESSAGE':
+        to_id = params.get('to_id')
+        message = params.get('message')
+        if to_id and message:
+            print(f"Executing SEND_MESSAGE to {to_id}")
+            send_message(to_id, message, interface)
+        else:
+            print("SEND_MESSAGE command missing 'to_id' or 'message' parameter.")
+    elif command == 'reload_config':
         print("Reloading configuration...")
         # In a real app, you would reload the config from file
     elif command == 'clear_cache':
@@ -698,14 +709,14 @@ def handle_command(command, params):
     else:
         print(f"Unknown command: {command}")
 
-def process_bot_commands():
+def process_bot_commands(interface, shutdown_event):
     """Process commands from the bot command queue."""
     commands = database.get_pending_bot_commands()
     for cmd in commands:
         try:
             print(f"Processing command {cmd['command']} with params {cmd['parameters']}")
             params = json.loads(cmd['parameters']) if cmd['parameters'] else {}
-            handle_command(cmd['command'], params)
+            handle_command(cmd['command'], params, interface, shutdown_event)
             database.mark_bot_command_processed(cmd['id'], 'processed')
         except Exception as e:
             print(f"Failed to process command {cmd['id']}: {e}")
@@ -720,7 +731,7 @@ def run_bot(shutdown_event):
     try:
         while not shutdown_event.is_set():
             process_outgoing_queue(interface)
-            process_bot_commands()
+            process_bot_commands(interface, shutdown_event)
             time.sleep(5)  # Check queues every 5 seconds
     finally:
         interface.close()

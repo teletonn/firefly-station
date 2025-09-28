@@ -22,11 +22,14 @@ async def get_dashboard_stats(current_user: dict = Depends(auth.get_current_acti
 
     return {
         "total_users": user_stats.get("total_users", 0),
-        "active_sessions": user_stats.get("active_sessions", 0),
-        "online_users": user_stats.get("online_now", 0),
+        "online_now": user_stats.get("online_now", 0),
+        "active_today": user_stats.get("active_today", 0),
+        "total_messages": message_stats.get("total", 0),
         "messages_today": message_stats.get("today", 0),
         "bot_status": bot_status,
         "total_alerts": alert_stats.get("total", 0),
+        "active_alerts": alert_stats.get("active", 0),
+        "critical_alerts": alert_stats.get("critical", 0),
         "active_zones": zone_stats.get("active", 0)
     }
 
